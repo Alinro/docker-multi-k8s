@@ -20,3 +20,18 @@ jobs:
       - run: docker push alinro/docker-multi-nginx
       - run: docker push alinro/docker-multi-server
       - run: docker push alinro/docker-multi-worker
+
+      - name: Generate deployment package
+        run: zip -r deploy.zip . -x '*.git*'
+
+      - name: Deploy to EB
+        uses: einaregilsson/beanstalk-deploy@v21
+        with:
+          aws_access_key: ${{ secrets.AWS_ACCESS_KEY }}
+          aws_secret_key: ${{ secrets.AWS_SECRET_KEY }}
+          application_name: ${{ secrets.APPLICATION_NAME }}
+          environment_name: ${{ secrets.ENVIRONMENT_NAME }}
+          existing_bucket_name: ${{ secrets.BUCKET_NAME }}
+          region: ${{ secrets.region }}
+          version_label: ${{ github.sha }}
+          deployment_package: deploy.zip
