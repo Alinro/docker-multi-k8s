@@ -48,7 +48,9 @@ jobs:
 
       - name: Apply
         run: |-
-          kubectl apply -f k8s
-          kubectl set image deployments/server-deployment server=alinro/docker-multi-server-k8s-gh:${{ github.sha }}
-          kubectl set image deployments/client-deployment client=alinro/docker-multi-client-k8s-gh:${{ github.sha }}
-          kubectl set image deployments/worker-deployment worker=alinro/docker-multi-worker-k8s-gh:${{ github.sha }}
+          kubectl version
+          kubectl apply -f k8s --validate=false
+
+#          kubectl set image deployments/server-deployment server=alinro/docker-multi-server-k8s-gh:${{ github.sha }}
+#          kubectl set image deployments/client-deployment client=alinro/docker-multi-client-k8s-gh:${{ github.sha }}
+#          kubectl set image deployments/worker-deployment worker=alinro/docker-multi-worker-k8s-gh:${{ github.sha }}
