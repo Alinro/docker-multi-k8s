@@ -48,7 +48,6 @@ jobs:
 
       - name: Apply
         run: |-
-          kubectl version
           kubectl apply -f k8s --validate=false
 
 #          kubectl set image deployments/server-deployment server=alinro/docker-multi-server-k8s-gh:${{ github.sha }}
