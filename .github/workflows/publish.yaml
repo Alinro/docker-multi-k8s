@@ -1,37 +1,54 @@
-name: Publish Docker images
+name: Deploy MultiK8s
 on:
   push:
     branches:
       - master
+
+env:
+  AWS_REGION: us-east-2
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - run: docker login -u ${{ secrets.DOCKER_USERNAME }} -p ${{ secrets.DOCKER_PASSWORD }}
 
-      - run: docker build -t alinro/docker-multi-client ./client
-      - run: docker build -t alinro/docker-multi-nginx ./nginx
-      - run: docker build -t alinro/docker-multi-server ./server
-      - run: docker build -t alinro/docker-multi-worker ./worker
+      - name: Test
+        run: |-
+          docker login -u ${{ secrets.DOCKER_USERNAME }} -p ${{ secrets.DOCKER_PASSWORD }}
+          docker build -t alinro/docker-multi-client-test -f ./client/Dockerfile.dev ./client
+          docker run -e CI=true alinro/docker-multi-client-test npm test
 
-      - run: docker push alinro/docker-multi-client
-      - run: docker push alinro/docker-multi-nginx
-      - run: docker push alinro/docker-multi-server
-      - run: docker push alinro/docker-multi-worker
-
-      - name: Generate deployment package
-        run: zip -r deploy.zip . -x '*.git*'
-
-      - name: Deploy to EB
-        uses: einaregilsson/beanstalk-deploy@v21
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials
         with:
-          aws_access_key: ${{ secrets.AWS_ACCESS_KEY }}
-          aws_secret_key: ${{ secrets.AWS_SECRET_KEY }}
-          application_name: ${{ secrets.APPLICATION_NAME }}
-          environment_name: ${{ secrets.ENVIRONMENT_NAME }}
-          existing_bucket_name: ${{ secrets.BUCKET_NAME }}
-          region: ${{ secrets.region }}
-          version_label: ${{ github.sha }}
-          deployment_package: deploy.zip
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Build
+        run: |-
+          docker build -t alinro/docker-multi-client-k8s-gh:latest -t alinro/docker-multi-client-k8s-gh:${{ github.sha }} -f ./client/Dockerfile ./client
+          docker build -t alinro/docker-multi-server-k8s-gh:latest -t alinro/docker-multi-server-k8s-gh:${{ github.sha }} -f ./server/Dockerfile ./server
+          docker build -t alinro/docker-multi-worker-k8s-gh:latest -t alinro/docker-multi-worker-k8s-gh:${{ github.sha }} -f ./worker/Dockerfile ./worker
+
+      - name: Push
+        run: |-
+          docker push alinro/docker-multi-client-k8s-gh:latest
+          docker push alinro/docker-multi-server-k8s-gh:latest
+          docker push alinro/docker-multi-worker-k8s-gh:latest
+
+          docker push alinro/docker-multi-client-k8s-gh:${{ github.sha }}
+          docker push alinro/docker-multi-server-k8s-gh:${{ github.sha }}
+          docker push alinro/docker-multi-worker-k8s-gh:${{ github.sha }}
+
+      - name: Update kube config
+        run: |-
+          aws eks update-kubeconfig --name docker-multi --region $AWS_REGION
+
+      - name: Apply
+        run: |-
+          kubectl apply -f k8s
+          kubectl set image deployments/server-deployment server=alinro/docker-multi-server-k8s-gh:${{ github.sha }}
+          kubectl set image deployments/client-deployment client=alinro/docker-multi-client-k8s-gh:${{ github.sha }}
+          kubectl set image deployments/worker-deployment worker=alinro/docker-multi-worker-k8s-gh:${{ github.sha }}
